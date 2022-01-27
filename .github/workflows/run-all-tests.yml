@@ -14,24 +14,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
         jdk: [8, 15, 17]
-        exclude:
-          # Only test against JDK 15 with Ubuntu since this is what OSS-Fuzz runs on.
-          - os: macos-latest
-            jdk: 15
-          - os: windows-latest
-            jdk: 15
         include:
           - os: ubuntu-latest
             arch: "linux"
             cache: "/home/runner/.cache/bazel-disk"
-          - os: macos-latest
-            arch: "darwin"
-            cache: "/private/var/tmp/bazel-disk"
-          - os: windows-latest
-            arch: "windows"
-            cache: "%HOME%/bazel-disk"
 
     steps:
       - uses: actions/checkout@v2
