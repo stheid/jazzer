@@ -12,7 +12,10 @@ It is based on [libFuzzer](https://llvm.org/docs/LibFuzzer.html) and brings many
 The JVM bytecode is executed inside the fuzzer process, which ensures fast execution speeds and allows seamless fuzzing of
 native libraries.
 
-Jazzer supports Linux and (experimentally) macOS 10.15 and Windows, all on the x64 architecture.
+Jazzer currently supports the following platforms:
+* Linux x86_64
+* macOS 10.15+ x86_64 (experimental support for arm64)
+* Windows x86_64
 
 ## News: Jazzer available in OSS-Fuzz
 
@@ -42,7 +45,7 @@ If Jazzer produces a finding, the input that triggered it will be available in t
 Jazzer has the following dependencies when being built from source:
 
 * JDK 8 or later (e.g. [OpenJDK](https://openjdk.java.net/))
-* [Clang](https://clang.llvm.org/) 9.0 or later (using a recent version is strongly recommended)
+* [Clang](https://clang.llvm.org/) and [LLD](https://lld.llvm.org/) 9.0 or later (using a recent version is strongly recommended)
 
 #### Linux
 
@@ -286,11 +289,11 @@ The format of the signature agrees with that obtained from the part after the `#
 
 Under the hood, jazzer tries various ways of creating objects from the fuzzer input. For example, if a parameter is an
 interface or an abstract class, it will look for all concrete implementing classes on the classpath.
-Jazzer can also create objects from classes that follow the [builder design pattern](https://www.baeldung.com/creational-design-patterns#builder) 
+Jazzer can also create objects from classes that follow the [builder design pattern](https://www.baeldung.com/creational-design-patterns#builder)
 or have a default constructor and use setters to set the fields.
 
-Creating objects from fuzzer input can lead to many reported exceptions. 
-Jazzer addresses this issue by ignoring exceptions that the target method declares to throw. 
+Creating objects from fuzzer input can lead to many reported exceptions.
+Jazzer addresses this issue by ignoring exceptions that the target method declares to throw.
 In addition to that, you can provide a list of exceptions to be ignored during fuzzing via the `--autofuzz_ignore` flag in the form of a comma-separated list.
 You can specify concrete exceptions (e.g., `java.lang.NullPointerException`), in which case also subclasses of these exception classes will be ignored, or glob patterns to ignore all exceptions in a specific package (e.g. `java.lang.*` or `com.company.**`).
 
@@ -314,7 +317,7 @@ docker run -it cifuzz/jazzer-autofuzz \
    --keep_going=1
 ```
 
-#### 
+####
 
 ### Reproducing a bug
 
@@ -354,6 +357,7 @@ Jazzer has so far uncovered the following vulnerabilities and bugs:
 
 | Project | Bug      | Status | CVE | found by |
 | ------- | -------- | ------ | --- | -------- |
+| [protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf) | Small protobuf messages can consume minutes of CPU time | [fixed](https://github.com/protocolbuffers/protobuf/security/advisories/GHSA-wrvw-hg22-4m67) | [CVE-2021-22569](https://nvd.nist.gov/vuln/detail/CVE-2021-22569) | [OSS-Fuzz](https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=39330) |
 | [jhy/jsoup](https://github.com/jhy/jsoup) | More than 19 Bugs found in HTML and XML parser | [fixed](https://github.com/jhy/jsoup/security/advisories/GHSA-m72m-mhq2-9p6c) | [CVE-2021-37714](https://nvd.nist.gov/vuln/detail/CVE-2021-37714) | [Code Intelligence](https://code-intelligence.com) |
 | [Apache/commons-compress](https://commons.apache.org/proper/commons-compress/) | Infinite loop when loading a crafted 7z | fixed | [CVE-2021-35515](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-35515) | [Code Intelligence](https://code-intelligence.com) |
 | [Apache/commons-compress](https://commons.apache.org/proper/commons-compress/) | `OutOfMemoryError` when loading a crafted 7z | fixed | [CVE-2021-35516](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-35516) | [Code Intelligence](https://code-intelligence.com) |
@@ -374,6 +378,7 @@ Jazzer has so far uncovered the following vulnerabilities and bugs:
 | [FasterXML/jackson-dataformats-binary](https://github.com/FasterXML/jackson-dataformats-binary) | `CBORParser` throws an undeclared exception on dangling arrays | [fixed](https://github.com/FasterXML/jackson-dataformats-binary/issues/240) | | [Code Intelligence](https://code-intelligence.com) |
 | [ngageoint/tiff-java](https://github.com/ngageoint/tiff-java) | `readTiff ` Index Out Of Bounds | [fixed](https://github.com/ngageoint/tiff-java/issues/38) | | [@raminfp](https://github.com/raminfp) |
 | [google/re2j](https://github.com/google/re2j) | `NullPointerException` in `Pattern.compile` | [reported](https://github.com/google/re2j/issues/148) | | [@schirrmacher](https://github.com/schirrmacher) |
+| [google/gson](https://github.com/google/gson) | `ArrayIndexOutOfBounds` in `ParseString` | [fixed](https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=40838) | | [@DavidKorczynski](https://twitter.com/Davkorcz) |
 
 As Jazzer is used to fuzz JVM projects in OSS-Fuzz, an additional list of bugs can be found [on the OSS-Fuzz issue tracker](https://bugs.chromium.org/p/oss-fuzz/issues/list?q=proj%3A%22json-sanitizer%22%20OR%20proj%3A%22fastjson2%22%20OR%20proj%3A%22jackson-core%22%20OR%20proj%3A%22jackson-dataformats-binary%22%20OR%20proj%3A%22jackson-dataformats-xml%22%20OR%20proj%3A%22apache-commons%22%20OR%20proj%3A%22jsoup%22&can=1).
 
@@ -388,6 +393,24 @@ Jazzer options are passed via double dash command-line flags, i.e., as `--option
 
 A full list of command-line flags can be printed with the `--help` flag. For the available libFuzzer options please refer
 to [its documentation](https://llvm.org/docs/LibFuzzer.html) for a detailed description.
+
+### Passing JVM arguments
+
+When Jazzer is launched, it starts a JVM in which it executes the fuzz target.
+Arguments for this JVM can be provided via the `JAVA_OPTS` environment variable.
+
+Alternatively, arguments can also be supplied via the `--jvm_args` argument.
+Multiple arguments are delimited by the classpath separator, which is `;` on Windows and `:` else.
+For example, to enable preview features as well as set a maximum heap size, add the following to the Jazzer invocation:
+
+```bash
+# Windows
+--jvm_args=--enable-preview;-Xmx1000m
+# Linux & macOS
+--jvm_args=--enable-preview:-Xmx1000m
+```
+
+Arguments specified with `--jvm_args` take precendence over those in `JAVA_OPTS`.
 
 ### Coverage Instrumentation
 
@@ -418,7 +441,7 @@ The particular instrumentation types to apply can be specified using the `--trac
 * `div`: divisors in integer divisions
 * `gep`: constant array indexes
 * `indir`: call through `Method#invoke`
-* `all`: shorthand to apply all available instrumentations
+* `all`: shorthand to apply all available instrumentations (except `gep`)
 
 Multiple instrumentation types can be combined with a colon.
 

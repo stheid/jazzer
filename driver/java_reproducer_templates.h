@@ -23,7 +23,7 @@ constexpr const char *kBaseReproducer =
 import java.lang.reflect.Method;
 
 public class Crash_$0 {
-    static final String base64Bytes = "$1";
+    static final String base64Bytes = String.join("", "$1");
 
     public static void main(String[] args) {
         ClassLoader.getSystemClassLoader().setDefaultAssertionStatus(true);
@@ -34,7 +34,7 @@ public class Crash_$0 {
             try {
                 Method fuzzerInitialize = $2.class.getMethod("fuzzerInitialize", String[].class);
                 fuzzerInitialize.invoke(null, (Object) args);
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException ignored1) {
             } catch (IllegalAccessException | InvocationTargetException e) {
                 e.printStackTrace();
                 System.exit(1);

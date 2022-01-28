@@ -36,11 +36,17 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import net.jodah.typetools.TypeResolver;
 import net.jodah.typetools.TypeResolver.Unknown;
 
@@ -52,19 +58,51 @@ public class Meta {
   static WeakHashMap<Class<?>, List<Method>> cascadingBuilderMethodsCache = new WeakHashMap<>();
 
   public static Object autofuzz(FuzzedDataProvider data, Method method) {
+    return autofuzz(data, method, null);
+  }
+
+  static Object autofuzz(FuzzedDataProvider data, Method method, AutofuzzCodegenVisitor visitor) {
+    Object result;
     if (Modifier.isStatic(method.getModifiers())) {
-      return autofuzz(data, method, null);
+      if (visitor != null) {
+        // This group will always have two elements: The class name and the method call.
+        visitor.pushGroup(
+            String.format("%s.", method.getDeclaringClass().getCanonicalName()), "", "");
+      }
+      result = autofuzz(data, method, null, visitor);
+      if (visitor != null) {
+        visitor.popGroup();
+      }
     } else {
-      Object thisObject = consume(data, method.getDeclaringClass());
+      if (visitor != null) {
+        // This group will always have two elements: The thisObject and the method call.
+        visitor.pushGroup("", ".", "");
+      }
+      Object thisObject = consume(data, method.getDeclaringClass(), visitor);
       if (thisObject == null) {
         throw new AutofuzzConstructionException();
       }
-      return autofuzz(data, method, thisObject);
+      result = autofuzz(data, method, thisObject, visitor);
+      if (visitor != null) {
+        visitor.popGroup();
+      }
     }
+    return result;
   }
 
   public static Object autofuzz(FuzzedDataProvider data, Method method, Object thisObject) {
-    Object[] arguments = consumeArguments(data, method);
+    return autofuzz(data, method, thisObject, null);
+  }
+
+  static Object autofuzz(
+      FuzzedDataProvider data, Method method, Object thisObject, AutofuzzCodegenVisitor visitor) {
+    if (visitor != null) {
+      visitor.pushGroup(String.format("%s(", method.getName()), ", ", ")");
+    }
+    Object[] arguments = consumeArguments(data, method, visitor);
+    if (visitor != null) {
+      visitor.popGroup();
+    }
     try {
       return method.invoke(thisObject, arguments);
     } catch (IllegalAccessException | IllegalArgumentException | NullPointerException e) {
@@ -76,7 +114,20 @@ public class Meta {
   }
 
   public static <R> R autofuzz(FuzzedDataProvider data, Constructor<R> constructor) {
-    Object[] arguments = consumeArguments(data, constructor);
+    return autofuzz(data, constructor, null);
+  }
+
+  static <R> R autofuzz(
+      FuzzedDataProvider data, Constructor<R> constructor, AutofuzzCodegenVisitor visitor) {
+    if (visitor != null) {
+      // getCanonicalName is correct also for nested classes.
+      visitor.pushGroup(
+          String.format("new %s(", constructor.getDeclaringClass().getCanonicalName()), ", ", ")");
+    }
+    Object[] arguments = consumeArguments(data, constructor, visitor);
+    if (visitor != null) {
+      visitor.popGroup();
+    }
     try {
       return constructor.newInstance(arguments);
     } catch (InstantiationException | IllegalAccessException | IllegalArgumentException e) {
@@ -161,46 +212,123 @@ public class Meta {
   }
 
   public static Object consume(FuzzedDataProvider data, Class<?> type) {
+    return consume(data, type, null);
+  }
+
+  // Invariant: The Java source code representation of the returned object visited by visitor must
+  // represent an object of the same type as genericType. For example, a null value returned for
+  // the genericType Class<java.lang.String> should lead to the generated code
+  // "(java.lang.String) null", not just "null". This makes it possible to safely use consume in
+  // recursive argument constructions.
+  static Object consume(FuzzedDataProvider data, Type genericType, AutofuzzCodegenVisitor visitor) {
+    Class<?> type = getRawType(genericType);
     if (type == byte.class || type == Byte.class) {
-      return data.consumeByte();
+      byte result = data.consumeByte();
+      if (visitor != null)
+        visitor.pushElement(String.format("(byte) %s", result));
+      return result;
     } else if (type == short.class || type == Short.class) {
-      return data.consumeShort();
+      short result = data.consumeShort();
+      if (visitor != null)
+        visitor.pushElement(String.format("(short) %s", result));
+      return result;
     } else if (type == int.class || type == Integer.class) {
-      return data.consumeInt();
+      int result = data.consumeInt();
+      if (visitor != null)
+        visitor.pushElement(Integer.toString(result));
+      return result;
     } else if (type == long.class || type == Long.class) {
-      return data.consumeLong();
+      long result = data.consumeLong();
+      if (visitor != null)
+        visitor.pushElement(String.format("%sL", result));
+      return result;
     } else if (type == float.class || type == Float.class) {
-      return data.consumeFloat();
+      float result = data.consumeFloat();
+      if (visitor != null)
+        visitor.pushElement(String.format("%sF", result));
+      return result;
     } else if (type == double.class || type == Double.class) {
-      return data.consumeDouble();
+      double result = data.consumeDouble();
+      if (visitor != null)
+        visitor.pushElement(Double.toString(result));
+      return result;
     } else if (type == boolean.class || type == Boolean.class) {
-      return data.consumeBoolean();
+      boolean result = data.consumeBoolean();
+      if (visitor != null)
+        visitor.pushElement(Boolean.toString(result));
+      return result;
     } else if (type == char.class || type == Character.class) {
-      return data.consumeChar();
+      char result = data.consumeChar();
+      if (visitor != null)
+        visitor.addCharLiteral(result);
+      return result;
     }
     // Return null for non-primitive and non-boxed types in ~5% of the cases.
     // TODO: We might want to return null for boxed types sometimes, but this is complicated by the
     //       fact that TypeUtils can't distinguish between a primitive type and its wrapper and may
     //       thus easily cause false-positive NullPointerExceptions.
     if (!type.isPrimitive() && data.consumeByte((byte) 0, (byte) 19) == 0) {
+      if (visitor != null) {
+        if (type == Object.class) {
+          visitor.pushElement("null");
+        } else {
+          visitor.pushElement(String.format("(%s) null", type.getCanonicalName()));
+        }
+      }
       return null;
     }
     if (type == String.class || type == CharSequence.class) {
-      return data.consumeString(consumeArrayLength(data, 1));
+      String result = data.consumeString(consumeArrayLength(data, 1));
+      if (visitor != null)
+        visitor.addStringLiteral(result);
+      return result;
     } else if (type.isArray()) {
       if (type == byte[].class) {
-        return data.consumeBytes(consumeArrayLength(data, Byte.BYTES));
+        byte[] result = data.consumeBytes(consumeArrayLength(data, Byte.BYTES));
+        if (visitor != null) {
+          visitor.pushElement(IntStream.range(0, result.length)
+                                  .mapToObj(i -> "(byte) " + result[i])
+                                  .collect(Collectors.joining(", ", "new byte[]{", "}")));
+        }
+        return result;
       } else if (type == int[].class) {
-        return data.consumeInts(consumeArrayLength(data, Integer.BYTES));
+        int[] result = data.consumeInts(consumeArrayLength(data, Integer.BYTES));
+        if (visitor != null) {
+          visitor.pushElement(Arrays.stream(result)
+                                  .mapToObj(String::valueOf)
+                                  .collect(Collectors.joining(", ", "new int[]{", "}")));
+        }
+        return result;
       } else if (type == short[].class) {
-        return data.consumeShorts(consumeArrayLength(data, Short.BYTES));
+        short[] result = data.consumeShorts(consumeArrayLength(data, Short.BYTES));
+        if (visitor != null) {
+          visitor.pushElement(IntStream.range(0, result.length)
+                                  .mapToObj(i -> "(short) " + result[i])
+                                  .collect(Collectors.joining(", ", "new short[]{", "}")));
+        }
+        return result;
       } else if (type == long[].class) {
-        return data.consumeLongs(consumeArrayLength(data, Long.BYTES));
+        long[] result = data.consumeLongs(consumeArrayLength(data, Long.BYTES));
+        if (visitor != null) {
+          visitor.pushElement(Arrays.stream(result)
+                                  .mapToObj(e -> e + "L")
+                                  .collect(Collectors.joining(", ", "new long[]{", "}")));
+        }
+        return result;
       } else if (type == boolean[].class) {
-        return data.consumeBooleans(consumeArrayLength(data, 1));
+        boolean[] result = data.consumeBooleans(consumeArrayLength(data, 1));
+        if (visitor != null) {
+          visitor.pushElement(
+              Arrays.toString(result).replace(']', '}').replace("[", "new boolean[]{"));
+        }
+        return result;
       } else {
+        if (visitor != null) {
+          visitor.pushGroup(
+              String.format("new %s[]{", type.getComponentType().getName()), ", ", "}");
+        }
         int remainingBytesBeforeFirstElementCreation = data.remainingBytes();
-        Object firstElement = consume(data, type.getComponentType());
+        Object firstElement = consume(data, type.getComponentType(), visitor);
         int remainingBytesAfterFirstElementCreation = data.remainingBytes();
         int sizeOfElementEstimate =
             remainingBytesBeforeFirstElementCreation - remainingBytesAfterFirstElementCreation;
@@ -210,20 +338,96 @@ public class Meta {
           if (i == 0) {
             Array.set(array, i, firstElement);
           } else {
-            Array.set(array, i, consume(data, type.getComponentType()));
+            Array.set(array, i, consume(data, type.getComponentType(), visitor));
           }
+        }
+        if (visitor != null) {
+          if (Array.getLength(array) == 0) {
+            // We implicitly pushed the first element with the call to consume above, but it is not
+            // part of the array.
+            visitor.popElement();
+          }
+          visitor.popGroup();
         }
         return array;
       }
     } else if (type == ByteArrayInputStream.class || type == InputStream.class) {
-      return new ByteArrayInputStream(data.consumeBytes(data.remainingBytes() / 2));
+      byte[] array = data.consumeBytes(consumeArrayLength(data, Byte.BYTES));
+      if (visitor != null) {
+        visitor.pushElement(IntStream.range(0, array.length)
+                                .mapToObj(i -> "(byte) " + array[i])
+                                .collect(Collectors.joining(
+                                    ", ", "new java.io.ByteArrayInputStream(new byte[]{", "})")));
+      }
+      return new ByteArrayInputStream(array);
+    } else if (type == Map.class) {
+      if (visitor != null) {
+        // Do not use Collectors.toMap() since it cannot handle null values.
+        visitor.pushGroup("java.util.stream.Stream.of(", ", ",
+            ").collect(java.util.HashMap::new, (map, e) -> map.put(e.getKey(), e.getValue()), java.util.HashMap::putAll)");
+      }
+      ParameterizedType mapType = (ParameterizedType) genericType;
+      if (mapType.getActualTypeArguments().length != 2) {
+        throw new AutofuzzError(
+            "Expected Map generic type to have two type parameters: " + mapType);
+      }
+      Type keyType = mapType.getActualTypeArguments()[0];
+      Type valueType = mapType.getActualTypeArguments()[1];
+      int remainingBytesBeforeFirstEntryCreation = data.remainingBytes();
+      if (visitor != null) {
+        visitor.pushGroup("new java.util.AbstractMap.SimpleEntry<>(", ", ", ")");
+      }
+      Object firstKey = consume(data, keyType, visitor);
+      Object firstValue = consume(data, valueType, visitor);
+      if (visitor != null) {
+        visitor.popGroup();
+      }
+      int remainingBytesAfterFirstEntryCreation = data.remainingBytes();
+      int sizeOfElementEstimate =
+          remainingBytesBeforeFirstEntryCreation - remainingBytesAfterFirstEntryCreation;
+      int mapSize = consumeArrayLength(data, sizeOfElementEstimate);
+      Map<Object, Object> map = new HashMap<>(mapSize);
+      for (int i = 0; i < mapSize; i++) {
+        if (i == 0) {
+          map.put(firstKey, firstValue);
+        } else {
+          if (visitor != null) {
+            visitor.pushGroup("new java.util.AbstractMap.SimpleEntry<>(", ", ", ")");
+          }
+          map.put(consume(data, keyType, visitor), consume(data, valueType, visitor));
+          if (visitor != null) {
+            visitor.popGroup();
+          }
+        }
+      }
+      if (visitor != null) {
+        if (mapSize == 0) {
+          // We implicitly pushed the first entry with the call to consume above, but it is not
+          // part of the array.
+          visitor.popElement();
+        }
+        visitor.popGroup();
+      }
+      return map;
     } else if (type.isEnum()) {
-      return data.pickValue(type.getEnumConstants());
+      Enum<?> enumValue = (Enum<?>) data.pickValue(type.getEnumConstants());
+      if (visitor != null) {
+        visitor.pushElement(String.format("%s.%s", type.getName(), enumValue.name()));
+      }
+      return enumValue;
     } else if (type == Class.class) {
+      if (visitor != null)
+        visitor.pushElement(String.format("%s.class", YourAverageJavaClass.class.getName()));
       return YourAverageJavaClass.class;
     } else if (type == Method.class) {
+      if (visitor != null) {
+        throw new AutofuzzError("codegen has not been implemented for Method.class");
+      }
       return data.pickValue(sortExecutables(YourAverageJavaClass.class.getMethods()));
     } else if (type == Constructor.class) {
+      if (visitor != null) {
+        throw new AutofuzzError("codegen has not been implemented for Constructor.class");
+      }
       return data.pickValue(sortExecutables(YourAverageJavaClass.class.getConstructors()));
     } else if (type.isInterface() || Modifier.isAbstract(type.getModifiers())) {
       List<Class<?>> implementingClasses = implementingClassesCache.get(type);
@@ -250,18 +454,39 @@ public class Meta {
           throw new AutofuzzConstructionException();
         }
       }
-      return consume(data, data.pickValue(implementingClasses));
+      if (visitor != null) {
+        // This group will always have a single element: The instance of the implementing class.
+        visitor.pushGroup(String.format("(%s) ", type.getName()), "", "");
+      }
+      Object result = consume(data, data.pickValue(implementingClasses), visitor);
+      if (visitor != null) {
+        visitor.popGroup();
+      }
+      return result;
     } else if (type.getConstructors().length > 0) {
       Constructor<?> constructor = data.pickValue(sortExecutables(type.getConstructors()));
-      Object obj = autofuzz(data, constructor);
-      if (constructor.getParameterCount() == 0) {
+      boolean applySetters = constructor.getParameterCount() == 0;
+      if (visitor != null && applySetters) {
+        // Embed the instance creation and setters into an immediately invoked lambda expression to
+        // turn them into an expression.
+        String uniqueVariableName = visitor.uniqueVariableName();
+        visitor.pushGroup(String.format("((java.util.function.Supplier<%1$s>) (() -> {%1$s %2$s = ",
+                              type.getCanonicalName(), uniqueVariableName),
+            String.format("; %s.", uniqueVariableName),
+            String.format("; return %s;})).get()", uniqueVariableName));
+      }
+      Object obj = autofuzz(data, constructor, visitor);
+      if (applySetters) {
         List<Method> potentialSetters = getPotentialSetters(type);
         if (!potentialSetters.isEmpty()) {
           List<Method> pickedSetters =
               data.pickValues(potentialSetters, data.consumeInt(0, potentialSetters.size()));
           for (Method setter : pickedSetters) {
-            autofuzz(data, setter, obj);
+            autofuzz(data, setter, obj, visitor);
           }
+        }
+        if (visitor != null) {
+          visitor.popGroup();
         }
       }
       return obj;
@@ -281,14 +506,22 @@ public class Meta {
       List<Method> pickedMethods = data.pickValues(cascadingBuilderMethods, pickedMethodsNumber);
       Method builderMethod = data.pickValue(originalObjectCreationMethods);
 
+      if (visitor != null) {
+        // Group for the chain of builder methods.
+        visitor.pushGroup("", ".", "");
+      }
       Object builderObj =
-          autofuzz(data, data.pickValue(sortExecutables(pickedBuilder.getConstructors())));
+          autofuzz(data, data.pickValue(sortExecutables(pickedBuilder.getConstructors())), visitor);
       for (Method method : pickedMethods) {
-        builderObj = autofuzz(data, method, builderObj);
+        builderObj = autofuzz(data, method, builderObj, visitor);
       }
 
       try {
-        return builderMethod.invoke(builderObj);
+        Object obj = autofuzz(data, builderMethod, builderObj, visitor);
+        if (visitor != null) {
+          visitor.popGroup();
+        }
+        return obj;
       } catch (Exception e) {
         throw new AutofuzzConstructionException(e);
       }
@@ -406,11 +639,12 @@ public class Meta {
     return potentialSetters;
   }
 
-  private static Object[] consumeArguments(FuzzedDataProvider data, Executable executable) {
+  private static Object[] consumeArguments(
+      FuzzedDataProvider data, Executable executable, AutofuzzCodegenVisitor visitor) {
     Object[] result;
     try {
-      result = Arrays.stream(executable.getParameterTypes())
-                   .map((type) -> consume(data, type))
+      result = Arrays.stream(executable.getGenericParameterTypes())
+                   .map((type) -> consume(data, type, visitor))
                    .toArray();
       return result;
     } catch (AutofuzzConstructionException e) {
@@ -446,5 +680,23 @@ public class Meta {
       throw new AutofuzzError("consume returned " + result.getClass() + ", but need " + types[i]);
     }
     return result;
+  }
+
+  private static Class<?> getRawType(Type genericType) {
+    if (genericType instanceof Class<?>) {
+      return (Class<?>) genericType;
+    } else if (genericType instanceof ParameterizedType) {
+      return getRawType(((ParameterizedType) genericType).getRawType());
+    } else if (genericType instanceof WildcardType) {
+      // TODO: Improve this.
+      return Object.class;
+    } else if (genericType instanceof TypeVariable<?>) {
+      throw new AutofuzzError("Did not expect genericType to be a TypeVariable: " + genericType);
+    } else if (genericType instanceof GenericArrayType) {
+      // TODO: Improve this;
+      return Object[].class;
+    } else {
+      throw new AutofuzzError("Got unexpected class implementing Type: " + genericType);
+    }
   }
 }

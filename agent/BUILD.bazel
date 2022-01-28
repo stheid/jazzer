@@ -1,4 +1,5 @@
 load("@com_github_johnynek_bazel_jar_jar//:jar_jar.bzl", "jar_jar")
+load("//bazel:compat.bzl", "SKIP_ON_WINDOWS")
 load("//sanitizers:sanitizers.bzl", "SANITIZER_CLASSES")
 
 java_binary(
@@ -20,6 +21,22 @@ jar_jar(
     rules = "agent_shade_rules",
     visibility = ["//visibility:public"],
 )
+
+# Disabled as soot brings in lots of files at the top level.
+#sh_test(
+#    name = "jazzer_agent_shading_test",
+#    srcs = ["verify_shading.sh"],
+#    args = [
+#        "$(rootpath jazzer_agent_deploy.jar)",
+#    ],
+#    data = [
+#        # sh_test does not correctly forward runfiles associated to targets (such as
+#        # ":jazzer_agent_deploy"), so depend on a generated file instead.
+#        "jazzer_agent_deploy.jar",
+#        "@local_jdk//:bin/jar",
+#    ],
+#    target_compatible_with = SKIP_ON_WINDOWS,
+#)
 
 java_binary(
     name = "jazzer_api",

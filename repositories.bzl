@@ -57,9 +57,9 @@ def jazzer_dependencies():
     maybe(
         http_archive,
         name = "com_google_absl",
-        sha256 = "a2837e9042e4adac18e9bbc25f18c2c5ada0c672bc1bbeb9c8769e98b05c6c4e",
-        strip_prefix = "abseil-cpp-60be12ed9822078970f05f3c560324184302df6b",
-        url = "https://github.com/abseil/abseil-cpp/archive/60be12ed9822078970f05f3c560324184302df6b.zip",
+        sha256 = "5e1cbf25bf501f8e37866000a6052d02dbdd7b19a5b592251c59a4c9aa5c71ae",
+        strip_prefix = "abseil-cpp-f2dbd918d8d08529800eb72f23bd2829f92104a4",
+        url = "https://github.com/abseil/abseil-cpp/archive/f2dbd918d8d08529800eb72f23bd2829f92104a4.zip",
     )
 
     maybe(
@@ -73,7 +73,7 @@ def jazzer_dependencies():
     maybe(
         http_archive,
         name = "com_github_jhalterman_typetools",
-        build_file = "@jazzer//third_party:typetools.BUILD",
+        build_file = Label("//third_party:typetools.BUILD"),
         sha256 = "754f46de7d4c278cee2d4dba3c09ebe08fde03d0e67fc85d700611d9cdfb7868",
         strip_prefix = "typetools-887153d2a9adf032fac9f145594d0a0248618d48",
         url = "https://github.com/jhalterman/typetools/archive/887153d2a9adf032fac9f145594d0a0248618d48.tar.gz",
@@ -81,7 +81,7 @@ def jazzer_dependencies():
 
     maybe(
         http_archive,
-        build_file = "@jazzer//third_party:classgraph.BUILD",
+        build_file = Label("//third_party:classgraph.BUILD"),
         name = "com_github_classgraph_classgraph",
         sha256 = "535159d80c163d5b4d025c402b4562c92ed2d6d963db8c6c5255c0eb2c4e9f39",
         strip_prefix = "classgraph-classgraph-4.8.128",
@@ -91,13 +91,14 @@ def jazzer_dependencies():
     maybe(
         http_archive,
         name = "fmeum_rules_jni",
-        sha256 = "8d685e381cb625e11fac330085de2ebc13ad497d30c4e9b09beb212f7c27e8e7",
-        url = "https://github.com/fmeum/rules_jni/releases/download/v0.3.0/rules_jni-v0.3.0.tar.gz",
+        sha256 = "9a387a066f683a8aac4d165917dc7fe15ec2a20931894a97e153a9caab6123ca",
+        strip_prefix = "rules_jni-0.4.0",
+        url = "https://github.com/fmeum/rules_jni/archive/refs/tags/v0.4.0.tar.gz",
     )
 
     maybe(
         http_archive,
-        build_file = "@jazzer//third_party:asm.BUILD",
+        build_file = Label("//third_party:asm.BUILD"),
         name = "jazzer_ow2_asm",
         sha256 = "7b596cc584b241619911e99c5c96366fccd533b1a50b8720c151c2f74b5915e3",
         strip_prefix = "asm-ASM_9_2",
@@ -108,7 +109,7 @@ def jazzer_dependencies():
         http_archive,
         name = "jazzer_com_github_gflags_gflags",
         patches = [
-            "@jazzer//third_party:gflags-use-double-dash-args.patch",
+            Label("//third_party:gflags-use-double-dash-args.patch"),
         ],
         sha256 = "ce2931dd537eaab7dab78b25bec6136a0756ca0b2acbdab9aec0266998c0d9a7",
         strip_prefix = "gflags-827c769e5fc98e0f2a34c47cef953cc6328abced",
@@ -118,21 +119,29 @@ def jazzer_dependencies():
     maybe(
         http_archive,
         name = "jazzer_jacoco",
-        build_file = "@jazzer//third_party:jacoco_internal.BUILD",
+        build_file = Label("//third_party:jacoco_internal.BUILD"),
         patches = [
-            "@jazzer//third_party:jacoco-make-probe-adapter-subclassable.patch",
-            "@jazzer//third_party:jacoco-make-probe-inserter-subclassable.patch",
+            Label("//third_party:jacoco-make-probe-adapter-subclassable.patch"),
+            Label("//third_party:jacoco-make-probe-inserter-subclassable.patch"),
         ],
-        sha256 = "d764c2c02caf8836a12ac582263a109dcac9c1389d3ddee0548aed1322f6e01c",
-        strip_prefix = "jacoco-0.8.7",
-        url = "https://github.com/jacoco/jacoco/archive/v0.8.7.tar.gz",
+        sha256 = "4a3c65b8a8ca58ffcec77288820f557ed93125e8a0b43dd7460b776c58bb8ed9",
+        strip_prefix = "jacoco-0.8.7-jazzer",
+        url = "https://github.com/CodeIntelligenceTesting/jacoco/archive/v0.8.7-jazzer.tar.gz",
     )
 
-    maybe(
-        http_archive,
+
+    #maybe(
+    #   http_archive,
+    #    name = "jazzer_libfuzzer",
+    #    build_file = Label("//third_party:libFuzzer.BUILD"),
+    #    sha256 = "7bb1fe8fccda5e363f5dbbab2690d4e34a3690e816ff94352b79f0cf42d8d470",
+    #     strip_prefix = "llvm-project-jazzer-3a54570bb4fb54497c89ef5a36f67f44e91a8f3b/compiler-rt/lib/fuzzer",
+    #     url = "https://github.com/stheid/llvm-project-jazzer/archive/3a54570bb4fb54497c89ef5a36f67f44e91a8f3b.tar.gz",
+    # )
+
+    native.new_local_repository(
         name = "jazzer_libfuzzer",
-        build_file = "@jazzer//third_party:libFuzzer.BUILD",
-        sha256 = "562a00f14b634c376b1cf7dafa0192379c7d88ffbb1d7cb7a1599b302a648b69",
-        strip_prefix = "llvm-project-jazzer-4cace44fb775207a37ad35583b3ea0cc067f111b/compiler-rt/lib/fuzzer",
-        url = "https://github.com/CodeIntelligenceTesting/llvm-project-jazzer/archive/4cace44fb775207a37ad35583b3ea0cc067f111b.tar.gz",
+        path = "third_party/libfuzzer",
+        build_file = "//third_party:libFuzzer.BUILD",
     )
+

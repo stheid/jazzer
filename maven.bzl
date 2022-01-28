@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_jvm_external//:specs.bzl", "maven")
+
 JAZZER_API_VERSION = "0.10.0"
 JAZZER_API_COORDINATES = "com.code-intelligence:jazzer-api:%s" % JAZZER_API_VERSION
 
+# **WARNING**: These Maven dependencies have known vulnerabilities and are only used to test that
+#              Jazzer finds these issues. DO NOT USE.
 MAVEN_ARTIFACTS = [
+    "org.soot-oss:soot:4.3.0",
+    "org.jgrapht:jgrapht-core:1.5.1",
+    "org.jgrapht:jgrapht-io:1.5.1",
     "junit:junit:4.12",
     "org.apache.commons:commons-imaging:1.0-alpha2",
     "com.mikesamuel:json-sanitizer:1.2.1",
@@ -29,4 +36,6 @@ MAVEN_ARTIFACTS = [
     "javax.xml.bind:jaxb-api:2.3.1",
     "javax.el:javax.el-api:3.0.1-b06",
     "org.hibernate:hibernate-validator:5.2.4.Final",
+    maven.artifact("org.apache.logging.log4j", "log4j-api", "2.14.1", testonly = True),
+    maven.artifact("org.apache.logging.log4j", "log4j-core", "2.14.1", testonly = True),
 ]

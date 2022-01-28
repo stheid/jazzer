@@ -2,9 +2,9 @@ name: Build all targets and run all tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, devassist ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, devassist ]
 
   workflow_dispatch:
 
@@ -20,7 +20,6 @@ jobs:
           - os: ubuntu-latest
             arch: "linux"
             cache: "/home/runner/.cache/bazel-disk"
-
     steps:
       - uses: actions/checkout@v2
 
@@ -36,10 +35,14 @@ jobs:
           key: bazel-disk-cache-${{ matrix.arch }}-${{ matrix.jdk }}
 
       - name: Build
-        run: bazelisk build --config=ci --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }} --disk_cache=${{ matrix.cache }} --java_runtime_version=localjdk_${{ matrix.jdk }} //...
+        run: bazelisk build --disk_cache=${{ matrix.cache }} ${{ matrix.bazel_args }} //...
 
       - name: Test
-        run: bazelisk test --config=ci --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }} --disk_cache=${{ matrix.cache }} --java_runtime_version=localjdk_${{ matrix.jdk }} //...
+        run: bazelisk test --disk_cache=${{ matrix.cache }} ${{ matrix.bazel_args }} //...
+
+      - name: Print JDK used
+        if: matrix.os != 'windows-latest'
+        run: cat $(bazel info execution_root)/external/local_jdk/BUILD.bazel | grep java_home
 
       - name: Upload test logs
         if: always()

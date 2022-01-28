@@ -46,6 +46,7 @@ java_fuzz_target_test(
     fuzzer_args = ["--jvm_args=-Djazzer.native_lib=native_asan"],
     sanitizer = "address",
     target_class = "com.example.ExampleFuzzerWithNative",
+    verify_crash_reproducer = False,
     runtime_deps = [
         ":example_fuzzer_with_native_lib",
     ],
@@ -58,6 +59,7 @@ java_fuzz_target_test(
     target_class = "com.example.ExampleFuzzerWithNative",
     # Crashes at runtime without an error message.
     target_compatible_with = SKIP_ON_WINDOWS,
+    verify_crash_reproducer = False,
     runtime_deps = [
         ":example_fuzzer_with_native_lib",
     ],
@@ -102,17 +104,44 @@ java_fuzz_target_test(
     target_compatible_with = SKIP_ON_MACOS,
 )
 
+# WARNING: This fuzz target uses a vulnerable version of log4j, which could result in the execution
+# of arbitrary code during fuzzing if executed with an older JDK. Use at your own risk.
+java_fuzz_target_test(
+    name = "Log4jFuzzer",
+    timeout = "long",
+    srcs = [
+        "src/main/java/com/example/Log4jFuzzer.java",
+    ],
+    fuzzer_args = [
+        "-fork=4",
+        "-use_value_profile=1",
+    ],
+    # Finding this bug takes ~5 minutes on a decent laptop, but the GitHub Actions machines are not
+    # powerful enough to run it as part of our test suite.
+    tags = ["manual"],
+    target_class = "com.example.Log4jFuzzer",
+    deps = [
+        "@maven//:org_apache_logging_log4j_log4j_api",
+        "@maven//:org_apache_logging_log4j_log4j_core",
+    ],
+)
+
 java_fuzz_target_test(
     name = "JpegImageParserFuzzer",
     srcs = [
         "src/main/java/com/example/JpegImageParserFuzzer.java",
     ],
+    env = {
+        "JAVA_OPTS": "-Dfoo=not_foo -Djava_opts=1",
+    },
     fuzzer_args = [
         "-fork=5",
         "--additional_jvm_args=-Dbaz=baz",
     ] + select({
-        "@platforms//os:windows": ["--jvm_args=-Dfoo=foo;-Dbar=bar"],
-        "//conditions:default": ["--jvm_args=-Dfoo=foo:-Dbar=bar"],
+        # \\\\ becomes \\ when evaluated as a Starlark string literal, then \ in
+        # java_fuzz_target_test.
+        "@platforms//os:windows": ["--jvm_args=-Dfoo=foo;-Dbar=b\\\\;ar"],
+        "//conditions:default": ["--jvm_args=-Dfoo=foo:-Dbar=b\\\\:ar"],
     }),
     target_class = "com.example.JpegImageParserFuzzer",
     # The exit codes of the forked libFuzzer processes are not picked up correctly.
@@ -268,11 +297,11 @@ java_fuzz_target_test(
     srcs = [
         "src/main/java/com/example/TurboJpegFuzzer.java",
     ],
+    data = [
+        "@libjpeg_turbo//:turbojpeg_native",
+    ],
     fuzzer_args = [
         "-rss_limit_mb=8196",
-    ],
-    native_libs = [
-        "@libjpeg_turbo//:turbojpeg_native",
     ],
     sanitizer = "address",
     tags = ["manual"],

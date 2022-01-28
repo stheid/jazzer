@@ -1,4 +1,5 @@
 build --incompatible_strict_action_env
+build --sandbox_tmpfs_path=/tmp
 build --enable_platform_specific_config
 build -c opt
 
@@ -23,21 +24,14 @@ build --tool_java_language_version=9
 build:windows --extra_toolchains=@local_config_cc//:cc-toolchain-x64_windows-clang-cl
 build:windows --extra_execution_platforms=//:x64_windows-clang-cl
 build:windows --features=static_link_msvcrt
-# Required so that the JDK can find itself when loading the instrument agent lib.
-# FIXME: Debug why this is the case even though sun.boot.library.path is correctly set to
-#        external\local_jdk\bin under the Bazel cache.
+# Required as PATH doubles as the shared library search path on Windows and the
+# Java agent functionality depends on system-provided shared libraries.
 test:windows --noincompatible_strict_action_env
 run:windows --noincompatible_strict_action_env
 
 # Toolchain
-build:toolchain --extra_toolchains=@llvm_toolchain//:cc-toolchain-linux,@llvm_toolchain//:cc-toolchain-darwin
+# Since the toolchain is conditional on OS and architecture, set it on the particular GitHub Action.
 build:toolchain --//third_party:toolchain
-
-# CI tests (not using the toolchain to test OSS-Fuzz compatibility)
-build:ci --bes_results_url=https://app.buildbuddy.io/invocation/
-build:ci --bes_backend=grpcs://cloud.buildbuddy.io
-build:ci --remote_cache=grpcs://cloud.buildbuddy.io
-build:ci --remote_timeout=3600
 
 # Maven publishing (local only, requires GPG signature)
 build:maven --config=toolchain

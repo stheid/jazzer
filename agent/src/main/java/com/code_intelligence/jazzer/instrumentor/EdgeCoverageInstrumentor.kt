@@ -14,28 +14,24 @@
 
 package com.code_intelligence.jazzer.instrumentor
 
-import com.code_intelligence.jazzer.generated.JAVA_NO_THROW_METHODS
 import com.code_intelligence.jazzer.runtime.CoverageMap
-import com.code_intelligence.jazzer.third_party.jacoco.core.analysis.Analyzer
-import com.code_intelligence.jazzer.third_party.jacoco.core.analysis.ICoverageVisitor
-import com.code_intelligence.jazzer.third_party.jacoco.core.data.ExecutionDataStore
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.ClassProbesAdapter
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.ClassProbesVisitor
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.IClassProbesAdapterFactory
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.IMethodProbesAdapterFactory
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.IProbeIdGenerator
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.MethodProbesAdapter
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.flow.MethodProbesVisitor
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.instr.ClassInstrumenter
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.instr.IProbeArrayStrategy
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.instr.IProbeInserterFactory
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.instr.InstrSupport
-import com.code_intelligence.jazzer.third_party.jacoco.core.internal.instr.ProbeInserter
-import com.code_intelligence.jazzer.third_party.objectweb.asm.ClassReader
-import com.code_intelligence.jazzer.third_party.objectweb.asm.ClassVisitor
-import com.code_intelligence.jazzer.third_party.objectweb.asm.ClassWriter
-import com.code_intelligence.jazzer.third_party.objectweb.asm.MethodVisitor
-import com.code_intelligence.jazzer.third_party.objectweb.asm.Opcodes
+import org.jacoco.core.analysis.Analyzer
+import org.jacoco.core.analysis.ICoverageVisitor
+import org.jacoco.core.data.ExecutionDataStore
+import org.jacoco.core.internal.flow.ClassProbesAdapter
+import org.jacoco.core.internal.flow.ClassProbesVisitor
+import org.jacoco.core.internal.flow.IClassProbesAdapterFactory
+import org.jacoco.core.internal.flow.JavaNoThrowMethods
+import org.jacoco.core.internal.instr.ClassInstrumenter
+import org.jacoco.core.internal.instr.IProbeArrayStrategy
+import org.jacoco.core.internal.instr.IProbeInserterFactory
+import org.jacoco.core.internal.instr.InstrSupport
+import org.jacoco.core.internal.instr.ProbeInserter
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
 import kotlin.math.max
 
 class EdgeCoverageInstrumentor(
@@ -44,6 +40,11 @@ class EdgeCoverageInstrumentor(
 ) : Instrumentor {
     private var nextEdgeId = initialEdgeId
     private val coverageMapInternalClassName = coverageMapClass.name.replace('.', '/')
+    init {
+        if (isTesting) {
+            JavaNoThrowMethods.isTesting = true
+        }
+    }
 
     override fun instrument(bytecode: ByteArray): ByteArray {
         val reader = InstrSupport.classReaderFor(bytecode)
@@ -147,40 +148,6 @@ class EdgeCoverageInstrumentor(
         }
     }
 
-    /**
-     * Returns true if bytecode instrumentation should be injected right before a method invocation, e.g., because that
-     * method may throw.
-     */
-    private fun shouldInstrumentMethodEdge(
-        internalClassName: String,
-        methodName: String,
-        descriptor: String
-    ): Boolean {
-        if (internalClassName.startsWith("com/code_intelligence/jazzer/") && !isTesting)
-            return false
-        if (isNoThrowMethod(internalClassName, methodName, descriptor))
-            return false
-        return true
-    }
-
-    /**
-     * Checks whether a method is in a list of function known not to throw any exceptions (including subclasses of
-     * [java.lang.RuntimeException]).
-     *
-     * If a method is known not to throw any exceptions, calls to it do not need to be instrumented for coverage as it
-     * will always return to the same basic block.
-     *
-     * Note: According to the JVM specification, a [java.lang.VirtualMachineError] can always be thrown. As it is fatal
-     * for all practical purposes, we can ignore errors of this kind for coverage instrumentation.
-     */
-    private fun isNoThrowMethod(internalClassName: String, methodName: String, descriptor: String): Boolean {
-        // We only collect no throw information for the Java standard library.
-        if (!internalClassName.startsWith("java/"))
-            return false
-        val key = "$internalClassName#$methodName#$descriptor"
-        return key in JAVA_NO_THROW_METHODS
-    }
-
 // The remainder of this file interfaces with classes in org.jacoco.core.internal. Changes to this part should not be
 // necessary unless JaCoCo is updated or the way we instrument for coverage changes fundamentally.
 
@@ -210,35 +177,8 @@ class EdgeCoverageInstrumentor(
             EdgeCoverageProbeInserter(access, name, desc, mv, arrayStrategy)
         }
 
-    /**
-     * A [MethodProbesAdapter] that adds a call to [MethodProbesVisitor.visitProbe] on every method edge for which
-     * [shouldInstrumentMethodEdge] returns true.
-     */
-    private inner class EdgeCoverageMethodProbesAdapter(
-        probesVisitor: MethodProbesVisitor,
-        idGenerator: IProbeIdGenerator
-    ) : MethodProbesAdapter(probesVisitor, idGenerator) {
-        @Override
-        override fun visitMethodInsn(
-            opcode: Int,
-            owner: String,
-            name: String,
-            descriptor: String,
-            isInterface: Boolean
-        ) {
-            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
-            if (shouldInstrumentMethodEdge(owner, name, descriptor)) {
-                probesVisitor.visitProbe(nextEdgeId())
-            }
-        }
-    }
-
-    private val edgeCoverageMethodProbesAdapterFactory = IMethodProbesAdapterFactory { probesVisitor, idGenerator ->
-        EdgeCoverageMethodProbesAdapter(probesVisitor, idGenerator)
-    }
-
     private inner class EdgeCoverageClassProbesAdapter(cv: ClassProbesVisitor, trackFrames: Boolean) :
-        ClassProbesAdapter(cv, trackFrames, edgeCoverageMethodProbesAdapterFactory) {
+        ClassProbesAdapter(cv, trackFrames) {
         override fun nextId(): Int = nextEdgeId()
     }
 
