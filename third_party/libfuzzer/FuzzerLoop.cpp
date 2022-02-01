@@ -889,7 +889,8 @@ std::vector<std::string> Fuzzer::Loop(Vector<SizedFile> &CorporaFiles) {
   EXECUTING THE FILE PROVIDED VIA ORACLE
   */
   auto InitialCoverages = ReadAndExecuteSeedCorpora(CorporaFiles);
-  std::copy(InitialCoverages.begin(), InitialCoverages.end(), std::back_inserter(allCoverages));
+  if (Options.Oracle)
+    std::copy(InitialCoverages.begin(), InitialCoverages.end(), std::back_inserter(allCoverages));
   DFT.Clear(); // No need for DFT any more.
   TPC.SetPrintNewPCs(Options.PrintNewCovPcs);
   TPC.SetPrintNewFuncs(Options.PrintNewCovFuncs);
@@ -932,7 +933,8 @@ std::vector<std::string> Fuzzer::Loop(Vector<SizedFile> &CorporaFiles) {
     // Perform several mutations and runs.
     // new_coverages += MuteAndTestOne()
     std::vector<std::string> NewCoverages = MutateAndTestOne();
-    std::copy(NewCoverages.begin(), NewCoverages.end(), std::back_inserter(allCoverages));
+    if (Options.Oracle)
+      std::copy(NewCoverages.begin(), NewCoverages.end(), std::back_inserter(allCoverages));
 
     PurgeAllocator();
   }
