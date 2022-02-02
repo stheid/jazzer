@@ -880,10 +880,9 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     Socket *Sock = new Socket("/tmp/libfuzzer.sock");
     // infinite reading from socket
     for (dataOut Out; Sock->read(&Out);) {
-      delete F;
       // totalNumberofRuns gets incremented by ExecuteCallback 2 times, so need to add 2 here!
       Options.MaxNumberOfRuns = Out.mutRep + 2;
-      auto *F = new Fuzzer(Callback, *Corpus, *MD, Options);
+      F = new Fuzzer(Callback, *Corpus, *MD, Options);
       Input = Out.fileContents;
       Printf("#ORACLE (%s)", Input.c_str());
 
@@ -895,6 +894,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
       auto CorporaFiles = ReadCorpora({}, {FileName});
 
       std::vector<std::string> NewCoverages = F->Loop(CorporaFiles);
+      delete F;
       // Printf("newCoverages: %d\n", NewCoverages.size());
       Sock->write(NewCoverages);
     }

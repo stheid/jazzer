@@ -126,6 +126,7 @@ java_fuzz_target_test(
     ],
 )
 
+# Requires a more recent version of Jazzer's fork of libFuzzer.
 java_fuzz_target_test(
     name = "JpegImageParserFuzzer",
     srcs = [
@@ -143,6 +144,7 @@ java_fuzz_target_test(
         "@platforms//os:windows": ["--jvm_args=-Dfoo=foo;-Dbar=b\\\\;ar"],
         "//conditions:default": ["--jvm_args=-Dfoo=foo:-Dbar=b\\\\:ar"],
     }),
+    tags = ["manual"],
     target_class = "com.example.JpegImageParserFuzzer",
     # The exit codes of the forked libFuzzer processes are not picked up correctly.
     target_compatible_with = SKIP_ON_MACOS,
