@@ -28,7 +28,6 @@ public:
 
 private:
   int Sockfd;
-  int Conn;
   const char* SocketPath;
 };
 
