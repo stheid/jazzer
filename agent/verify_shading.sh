@@ -23,5 +23,16 @@
     -e '^com/code_intelligence/$' \
     -e '^com/code_intelligence/jazzer/' \
     -e '^jaz/' \
-    -e '^soot/' \
-    -e '^META-INF/'
+    -e '^META-INF/' \
+    -e '^xlink.xsd$' \
+    -e '^viz.xsd$' \
+    -e '^tables.out/' \
+    -e '^peephole.dat$' \
+    -e '^parser.dat$' \
+    -e '^lexer.dat$' \
+    -e '^javabase.txt$' \
+    -e '^graphml.xsd$' \
+    -e '^gexf.xsd$' \
+    -e '^XPP3_1.1.3.4d_b4_MIN_VERSION$' \
+    -e '^.gitkeep$' \
+    -e '^module-info.class$'
