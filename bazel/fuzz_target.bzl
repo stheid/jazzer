@@ -78,7 +78,10 @@ def java_fuzz_target_test(
             str(verify_crash_input),
             str(verify_crash_reproducer),
             str(execute_crash_reproducer),
-        ] + additional_args + fuzzer_args,
+        ] + additional_args + fuzzer_args + [
+            # Verify the call graph functionality by enabling it for every test.
+            "--call_graph_basepath=/tmp/icfg",
+        ],
         data = [
             ":%s_deploy.jar" % target_name,
             "//agent:jazzer_agent_deploy.jar",
