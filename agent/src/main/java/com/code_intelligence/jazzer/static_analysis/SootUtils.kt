@@ -46,7 +46,7 @@ object InstrumentedClassProvider : ClassProvider {
 
     private fun getUninstrumentedBytecode(clazz: Class<*>): ByteArray? {
         val classResourceName = "/${clazz.name.replace('.', '/')}.class"
-        return clazz.getResourceAsStream(classResourceName)?.readAllBytes()
+        return clazz.getResourceAsStream(classResourceName)?.readBytes()
     }
 
     override fun find(className: String): ClassSource? {
