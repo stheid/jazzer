@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        jdk: [8, 15, 17]
+        jdk: [11]
         include:
           - os: ubuntu-latest
             arch: "linux"
