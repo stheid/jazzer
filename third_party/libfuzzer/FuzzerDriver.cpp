@@ -884,7 +884,6 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
       Options.MaxNumberOfRuns = Out.mutRep + 2;
       F = new Fuzzer(Callback, *Corpus, *MD, Options);
       Input = Out.fileContents;
-      Printf("#ORACLE (%s)", Input.c_str());
 
       // write to file
       Myfile.open(FileName);
