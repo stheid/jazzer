@@ -16,4 +16,3 @@ rule polyglot.** com.code_intelligence.jazzer.third_party.polyglot.@1
 rule ppg.** com.code_intelligence.jazzer.third_party.ppg.@1
 rule pxb.** com.code_intelligence.jazzer.third_party.pxb.@1
 rule scm.** com.code_intelligence.jazzer.third_party.scm.@1
-rule soot.** com.code_intelligence.jazzer.third_party.soot.@1

@@ -35,4 +35,5 @@
     -e '^gexf.xsd$' \
     -e '^XPP3_1.1.3.4d_b4_MIN_VERSION$' \
     -e '^.gitkeep$' \
+    -e '^soot/' \
     -e '^module-info.class$'
