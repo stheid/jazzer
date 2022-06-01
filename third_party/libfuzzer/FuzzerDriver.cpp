@@ -887,14 +887,14 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
 
       // write to file
       Myfile.open(FileName);
-      Myfile << Input.c_str();
+      Myfile << Input;
       Myfile.close();
 
       auto CorporaFiles = ReadCorpora({}, {FileName});
 
       std::vector<std::string> NewCoverages = F->Loop(CorporaFiles);
       delete F;
-      // Printf("newCoverages: %d\n", NewCoverages.size());
+
       Sock->write(NewCoverages);
     }
     std::remove(FileName.c_str());

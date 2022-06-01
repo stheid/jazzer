@@ -51,13 +51,15 @@ bool Socket::read(dataOut *Out) {
   int N;
   char RetValue[Len.Integer];
   // now reading file contents
-  N = ::recv(Sockfd, RetValue, Len.Integer, 0);
+  N = ::read(Sockfd, RetValue, Len.Integer);
   if (N < 0) {
     std::cout << "socket read failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  Out->fileContents = RetValue;
+  // explicitly provide the length of number of bytes to process in the string constructor, otherwise it will stop after the first null
+  // https://stackoverflow.com/a/4691703
+  Out->fileContents = string(RetValue, RetValue + Len.Integer);
   return true;
 }
 
