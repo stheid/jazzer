@@ -21,7 +21,7 @@ public:
   
   Socket(const char *Path);
   bool read(dataOut *Out);
-  bool write(std::vector<std::string> Data);
+  bool write(std::vector<std::string> Data, std::vector<bool> IsNonCrashing);
   bool close();
   ~ Socket();
   

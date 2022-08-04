@@ -892,10 +892,11 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
 
       auto CorporaFiles = ReadCorpora({}, {FileName});
 
-      std::vector<std::string> NewCoverages = F->Loop(CorporaFiles);
+      std::vector<bool> IsNonCrashing;
+      std::vector<std::string> NewCoverages = F->Loop(CorporaFiles, &IsNonCrashing);
       delete F;
 
-      Sock->write(NewCoverages);
+      Sock->write(NewCoverages, IsNonCrashing);
     }
     std::remove(FileName.c_str());
     exit(EXIT_SUCCESS);
@@ -960,7 +961,8 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   }
 
   auto CorporaFiles = ReadCorpora(*Inputs, ParseSeedInuts(Flags.seed_inputs));
-  F->Loop(CorporaFiles);
+  std::vector<bool> IsNonCrashing;
+  F->Loop(CorporaFiles,&IsNonCrashing);
 
   if (Flags.verbosity)
     Printf("Done %zd runs in %zd second(s)\n", F->getTotalNumberOfRuns(),

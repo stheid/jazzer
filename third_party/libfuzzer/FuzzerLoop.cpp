@@ -526,13 +526,13 @@ static void WriteEdgeToMutationGraphFile(const std::string &MutationGraphFile,
 
 bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
                     InputInfo *II, bool ForceAddToCorpus,
-                    bool *FoundUniqFeatures) {
+                    bool *FoundUniqFeatures, bool *IsNonCrashing) {
   if (!Size)
     return false;
   // Largest input length should be INT_MAX.
   assert(Size < std::numeric_limits<uint32_t>::max());
 
-  ExecuteCallback(Data, Size);
+  *IsNonCrashing = ExecuteCallback(Data, Size);
   auto TimeOfUnit = duration_cast<microseconds>(UnitStopTime - UnitStartTime);
 
   UniqFeatureSetTmp.clear();
@@ -607,7 +607,8 @@ static bool LooseMemeq(const uint8_t *A, const uint8_t *B, size_t Size) {
 
 // This method is not inlined because it would cause a test to fail where it
 // is part of the stack unwinding. See D97975 for details.
-ATTRIBUTE_NOINLINE void Fuzzer::ExecuteCallback(const uint8_t *Data,
+// :return: boolean false if input is crashing
+ATTRIBUTE_NOINLINE bool Fuzzer::ExecuteCallback(const uint8_t *Data,
                                                 size_t Size) {
   TPC.RecordInitialStack();
   TotalNumberOfRuns++;
@@ -623,23 +624,26 @@ ATTRIBUTE_NOINLINE void Fuzzer::ExecuteCallback(const uint8_t *Data,
   if (CurrentUnitData && CurrentUnitData != Data)
     memcpy(CurrentUnitData, Data, Size);
   CurrentUnitSize = Size;
+  int Res;
   {
     ScopedEnableMsanInterceptorChecks S;
     AllocTracer.Start(Options.TraceMalloc);
     UnitStartTime = system_clock::now();
     TPC.ResetMaps();
     RunningUserCallback = true;
-    int Res = CB(DataCopy, Size);
+    Res = CB(DataCopy, Size);
     RunningUserCallback = false;
     UnitStopTime = system_clock::now();
     (void)Res;
-    assert(Res == 0);
+    assert(Res == 0 || Res == 1);
     HasMoreMallocsThanFrees = AllocTracer.Stop();
   }
   if (!LooseMemeq(DataCopy, Data, Size))
     CrashOnOverwrittenData();
   CurrentUnitSize = 0;
   delete[] DataCopy;
+  // true if no crash, otherwise false
+  return Res == 0;
 }
 
 std::string Fuzzer::WriteToOutputCorpus(const Unit &U) {
@@ -733,7 +737,7 @@ void Fuzzer::TryDetectingAMemoryLeak(const uint8_t *Data, size_t Size,
   }
 }
 
-std::vector<std::string> Fuzzer::MutateAndTestOne() {
+std::vector<std::string> Fuzzer::MutateAndTestOne(bool *IsNonCrashing) {
   MD.StartMutationSequence();
 
   auto &II = Corpus.ChooseUnitToMutate(MD.GetRand());
@@ -776,7 +780,7 @@ std::vector<std::string> Fuzzer::MutateAndTestOne() {
 
     bool FoundUniqFeatures = false;
     bool NewCov = RunOne(CurrentUnitData, Size, /*MayDeleteFile=*/true, &II,
-                         /*ForceAddToCorpus*/ false, &FoundUniqFeatures);
+                         /*ForceAddToCorpus*/ false, &FoundUniqFeatures, IsNonCrashing);
     coverageCounters.push_back(TPC.GetCoverageCounters());
     TryDetectingAMemoryLeak(CurrentUnitData, Size,
                             /*DuringInitialCorpusExecution*/ false);
@@ -878,7 +882,7 @@ std::vector<std::string> Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &Co
   return coverageCounters;
 }
 
-std::vector<std::string> Fuzzer::Loop(Vector<SizedFile> &CorporaFiles) {
+std::vector<std::string> Fuzzer::Loop(Vector<SizedFile> &CorporaFiles, std::vector<bool> *allIsNonCrashing) {
   std::vector<std::string> allCoverages;
   auto FocusFunctionOrAuto = Options.FocusFunction;
   DFT.Init(Options.DataFlowTrace, &FocusFunctionOrAuto, CorporaFiles,
@@ -932,9 +936,12 @@ std::vector<std::string> Fuzzer::Loop(Vector<SizedFile> &CorporaFiles) {
     */
     // Perform several mutations and runs.
     // new_coverages += MuteAndTestOne()
-    std::vector<std::string> NewCoverages = MutateAndTestOne();
-    if (Options.Oracle)
+    bool IsNonCrashing;
+    std::vector<std::string> NewCoverages = MutateAndTestOne(&IsNonCrashing);
+    if (Options.Oracle){
       std::copy(NewCoverages.begin(), NewCoverages.end(), std::back_inserter(allCoverages));
+      allIsNonCrashing->push_back(IsNonCrashing);
+    }
 
     PurgeAllocator();
   }

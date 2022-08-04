@@ -63,7 +63,7 @@ bool Socket::read(dataOut *Out) {
   return true;
 }
 
-bool Socket::write(std::vector<std::string> Data) {
+bool Socket::write(std::vector<std::string> Data, std::vector<bool> IsNonCrashing) {
   int_asbytes Len;
   // send number of inputs
   Len.Integer = Data.size();
@@ -71,7 +71,10 @@ bool Socket::write(std::vector<std::string> Data) {
     std::cout << "Error" << std::endl;
     exit(EXIT_FAILURE);
   }
-  for (auto Dat : Data) {
+   for(int i = 0; i < Data.size(); i++){
+    auto Dat = Data[i];
+    auto Succ = IsNonCrashing[i];
+
     // send length of the cov vector and the vector itself
     Len.Integer = Dat.size();
     if (::write(Sockfd, Len.Byte, 4) == -1) {
@@ -80,6 +83,12 @@ bool Socket::write(std::vector<std::string> Data) {
     }
 
     if (::write(Sockfd, Dat.c_str(), Dat.size()) == -1) {
+      std::cout << "Error" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    // Send information whether the file has caused the PuT to crash
+    if (::write(Sockfd, &Succ, 1) == -1) {
       std::cout << "Error" << std::endl;
       exit(EXIT_FAILURE);
     }

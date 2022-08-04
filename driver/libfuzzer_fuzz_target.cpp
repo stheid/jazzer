@@ -76,7 +76,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, const size_t size) {
     gLibfuzzerDriver->DumpReproducer(data, size);
     if (result == jazzer::RunResult::kDumpAndContinue) {
       // Continue fuzzing after printing the crashing input.
-      return 0;
+      return 1;
     }
     // Exit directly without invoking libFuzzer's atexit hook.
     driver_cleanup();
