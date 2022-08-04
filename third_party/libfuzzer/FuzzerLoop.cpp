@@ -532,7 +532,12 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
   // Largest input length should be INT_MAX.
   assert(Size < std::numeric_limits<uint32_t>::max());
 
-  *IsNonCrashing = ExecuteCallback(Data, Size);
+  if (IsNonCrashing == nullptr){
+    ExecuteCallback(Data, Size);
+  } else {
+    *IsNonCrashing = ExecuteCallback(Data, Size);
+  }
+
   auto TimeOfUnit = duration_cast<microseconds>(UnitStopTime - UnitStartTime);
 
   UniqFeatureSetTmp.clear();
@@ -855,7 +860,7 @@ std::vector<std::string> Fuzzer::ReadAndExecuteSeedCorpora(Vector<SizedFile> &Co
       //       /*ForceAddToCorpus*/ Options.KeepSeed,
       //       /*FoundUniqFeatures*/ nullptr);
       RunOne(U.data(), U.size(), /*MayDeleteFile=*/true, nullptr,
-            /*ForceAddToCorpus*/ true, nullptr);
+            /*ForceAddToCorpus*/ true);
       CheckExitOnSrcPosOrItem();
       TryDetectingAMemoryLeak(U.data(), U.size(),
                               /*DuringInitialCorpusExecution*/ true);
